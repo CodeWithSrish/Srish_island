@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Survival Island</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:wght@400;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto Mono', monospace;
+            background-color: #1a202c;
+            color: #a0aec0;
+        }
+        .font-title {
+            font-family: 'Playfair Display', serif;
+        }
+        .sql-editor {
+            background-color: #2d3748;
+            border-color: #4a5568;
+            color: #e2e8f0;
+            font-family: 'Roboto Mono', monospace;
+            font-size: 14px;
+        }
+        .result-table th, .result-table td {
+            border-color: #4a5568;
+        }
+        .btn-primary {
+            background-color: #2b6cb0;
+            transition: background-color: 0.3s ease;
+        }
+        .btn-primary:hover {
+            background-color: #2c5282;
+        }
+        .btn-secondary {
+            background-color: #4a5568;
+            transition: background-color: 0.3s ease;
+        }
+        .btn-secondary:hover {
+            background-color: #2d3748;
+        }
+        .map-location {
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .map-location.locked {
+            filter: grayscale(100%) brightness(0.5);
+        }
+        .map-location.active .map-icon {
+             transform: scale(1.2);
+             filter: drop-shadow(0 0 15px #38a169);
+        }
+         .map-icon {
+            font-size: 2.5rem;
+            transition: transform 0.3s ease, filter 0.3s ease;
+        }
+        .modal-backdrop {
+            background-color: rgba(0,0,0,0.75);
+        }
+    </style>
+</head>
+<body class="w-screen h-screen p-4 flex flex-col gap-4 overflow-hidden">
+
+    <!-- Header -->
+    <header class="flex-shrink-0 flex items-center justify-between bg-gray-800 p-3 rounded-lg shadow-lg">
+        <h1 class="font-title text-2xl text-white">SQL Survival Island 🏝️</h1>
+        <div class="flex items-center gap-4">
+            <div id="game-status" class="text-lg text-blue-300">Welcome, Survivor!</div>
+            <button id="switch-level-btn" class="btn-secondary text-white font-bold py-1 px-3 rounded-lg text-sm hidden">Switch Level</button>
+            <button id="exit-game-btn" class="btn-secondary text-red-300 font-bold py-1 px-3 rounded-lg text-sm hidden">Exit Game</button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="flex-grow grid md:grid-cols-3 lg:grid-cols-4 gap-4 h-full min-h-0">
+
+        <!-- Left Panel: Game Info & Map -->
+        <div class="md:col-span-1 lg:col-span-1 bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col gap-4 overflow-y-auto">
+            <!-- Player Stats -->
+            <div id="player-stats-container">
+                <h2 class="font-title text-xl text-white mb-2">Survivor Status</h2>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="bg-gray-700 p-2 rounded">❤️ Health: <span id="health-stat">100</span></div>
+                    <div class="bg-gray-700 p-2 rounded">⚡ Energy: <span id="energy-stat">100</span></div>
+                    <div class="bg-gray-700 p-2 rounded col-span-2">🏆 Score: <span id="score-stat">0</span></div>
+                    <div id="timer-container" class="hidden bg-red-800/50 text-red-300 p-2 rounded col-span-2">⏳ Time: <span id="timer-stat">60</span>s</div>
+                </div>
+            </div>
+            <!-- Weather Effect -->
+            <div id="weather-container" class="hidden bg-blue-800/50 text-blue-200 p-2 rounded text-sm">
+                <h3 class="font-bold">Current Weather: <span id="weather-condition"></span></h3>
+                <p id="weather-effect" class="text-xs"></p>
+            </div>
+             <!-- Opponent Stats -->
+            <div id="opponent-stats-container" class="hidden">
+                <h2 class="font-title text-xl text-white mb-2">Opponent Status</h2>
+                <div class="grid grid-cols-2 gap-2 text-sm">
+                    <div class="bg-gray-700 p-2 rounded">🏆 Score: <span id="opponent-score-stat">0</span></div>
+                    <div class="bg-gray-700 p-2 rounded col-span-2">Status: <span id="opponent-status">Waiting...</span></div>
+                </div>
+            </div>
+            <!-- Island Map -->
+            <div>
+                <h2 class="font-title text-xl text-white mb-2">Island Map</h2>
+                <div id="island-map" class="bg-gray-900/50 p-3 rounded-lg grid grid-cols-3 gap-4 items-center justify-center">
+                    <!-- Locations will be injected here by JS -->
+                </div>
+            </div>
+            <!-- Schema Viewer -->
+            <div id="schema-viewer-container">
+                 <h2 class="font-title text-xl text-white mb-2">Database Schema</h2>
+                 <div id="schema-viewer" class="text-xs space-y-2">
+                    <!-- Schema will be injected by JS -->
+                 </div>
+            </div>
+            <!-- Table Viewer -->
+            <div id="table-viewer-container">
+                 <h2 class="font-title text-xl text-white mb-2">View Full Tables</h2>
+                 <div id="table-viewer" class="flex flex-wrap gap-2">
+                    <!-- Table buttons will be injected here by JS -->
+                 </div>
+            </div>
+        </div>
+
+        <!-- Middle Panel: Challenge & SQL Editor -->
+        <div class="md:col-span-2 lg:col-span-2 bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col gap-4 overflow-y-auto">
+            <!-- Challenge Info -->
+            <div id="challenge-container">
+                 <h2 id="challenge-title" class="font-title text-2xl text-blue-300">Select a Game Mode</h2>
+                 <p id="challenge-story" class="mt-2 text-gray-300">You've washed ashore on a mysterious island. Use your SQL knowledge to survive and find a way back to civilization. Your journey begins now.</p>
+                 <p id="challenge-hint" class="mt-2 text-xs text-gray-500 italic"></p>
+            </div>
+            <!-- SQL Editor -->
+            <div class="flex-grow flex flex-col">
+                <label for="sql-editor" class="text-white mb-2">SQL Query Editor</label>
+                <textarea id="sql-editor" class="sql-editor w-full flex-grow rounded-md p-2" placeholder="Write your SQL query here..."></textarea>
+            </div>
+            <!-- Action Buttons -->
+            <div class="flex-shrink-0 flex items-center justify-between">
+                <div id="message-area" class="text-sm font-bold"></div>
+                <div class="flex items-center gap-2">
+                    <button id="get-hint-btn" class="btn-secondary text-white font-bold py-2 px-4 rounded-lg shadow-md hidden">Get Hint (-5 pts)</button>
+                    <button id="run-query-btn" class="btn-primary text-white font-bold py-2 px-4 rounded-lg shadow-md" disabled>
+                        Run Query
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Panel: Results -->
+        <div class="md:col-span-3 lg:col-span-1 bg-gray-800 rounded-lg shadow-lg p-4 flex flex-col overflow-y-auto">
+             <h2 id="result-title" class="font-title text-xl text-white mb-2 flex-shrink-0">Query Result</h2>
+             <div id="result-container" class="flex-grow overflow-auto bg-gray-900/50 rounded-lg">
+                <table class="w-full text-sm text-left result-table">
+                    <thead id="result-head" class="text-xs text-gray-300 uppercase bg-gray-700 sticky top-0"></thead>
+                    <tbody id="result-body" class="divide-y divide-gray-600"></tbody>
+                </table>
+             </div>
+        </div>
+
+    </main>
+    
+    <!-- Modals -->
+    <div id="game-mode-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop z-50">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-lg w-full text-center">
+            <h2 class="font-title text-3xl text-white mb-6">Choose Your Adventure</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <button id="start-single-player" class="btn-secondary text-white font-bold p-4 rounded-lg">Single Player</button>
+                <button id="start-vs-computer" class="btn-secondary text-white font-bold p-4 rounded-lg">vs. Computer</button>
+                <button id="start-multiplayer" class="btn-primary text-white font-bold p-4 rounded-lg">Multiplayer</button>
+            </div>
+        </div>
+    </div>
+    
+    <div id="difficulty-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop z-50 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-sm w-full text-center">
+            <h2 class="font-title text-3xl text-white mb-6">Select Difficulty</h2>
+            <div class="flex flex-col gap-3">
+                <button data-difficulty="easy" class="btn-secondary text-white font-bold p-3 rounded-lg">Easy (Hints)</button>
+                <button data-difficulty="moderate" class="btn-secondary text-white font-bold p-3 rounded-lg">Moderate (No Hints)</button>
+                <button data-difficulty="hard" class="btn-secondary text-white font-bold p-3 rounded-lg">Hard (No Timer & Penalties)</button>
+                <button data-difficulty="genius" class="btn-secondary text-white font-bold p-3 rounded-lg">Genius (60s Timer & Penalties)</button>
+            </div>
+             <p class="text-center mt-4"><button id="back-to-mode-select-btn" class="text-blue-400 hover:underline">Back to Mode Select</button></p>
+        </div>
+    </div>
+
+    <div id="multiplayer-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop z-50 hidden">
+        <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-sm w-full">
+            <h2 class="font-title text-3xl text-white mb-6 text-center">Multiplayer Lobby</h2>
+            <p class="text-center mb-4">Create a room or join one with a code.</p>
+            <div class="flex flex-col gap-4">
+                 <button id="create-room-btn" class="btn-primary text-white font-bold p-3 rounded-lg">Create New Room</button>
+                 <div class="flex gap-2">
+                    <input id="room-code-input" type="text" placeholder="Enter Room Code" class="sql-editor w-full p-3 rounded-lg">
+                    <button id="join-room-btn" class="btn-secondary text-white font-bold p-3 rounded-lg">Join</button>
+                 </div>
+                 <div id="multiplayer-message" class="text-center text-sm mt-2"></div>
+                 <p class="text-center mt-2"><button id="back-to-menu-btn" class="text-blue-400 hover:underline">Back to Main Menu</button></p>
+            </div>
+        </div>
+    </div>
+    
+    <div id="game-over-modal" class="fixed inset-0 flex items-center justify-center modal-backdrop z-50 hidden">
+         <div class="bg-gray-800 rounded-lg shadow-2xl p-8 max-w-lg w-full text-center">
+            <h2 id="game-over-title" class="font-title text-4xl text-white mb-4"></h2>
+            <p id="game-over-message" class="text-lg text-gray-300 mb-6"></p>
+            <p class="text-2xl mb-6">Final Score: <span id="final-score" class="font-bold text-yellow-400"></span></p>
+            <button id="play-again-btn" class="btn-primary text-white font-bold py-3 px-6 rounded-lg">Play Again</button>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js"></script>
+    <script type="module">
+        // Firebase Imports
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, getDoc, setDoc, onSnapshot, updateDoc, deleteDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // --- DOM ELEMENTS ---
+        const DOMElements = {
+            gameStatus: document.getElementById('game-status'),
+            switchLevelBtn: document.getElementById('switch-level-btn'),
+            exitGameBtn: document.getElementById('exit-game-btn'),
+            healthStat: document.getElementById('health-stat'),
+            energyStat: document.getElementById('energy-stat'),
+            scoreStat: document.getElementById('score-stat'),
+            timerContainer: document.getElementById('timer-container'),
+            timerStat: document.getElementById('timer-stat'),
+            weatherContainer: document.getElementById('weather-container'),
+            weatherCondition: document.getElementById('weather-condition'),
+            weatherEffect: document.getElementById('weather-effect'),
+            opponentStatsContainer: document.getElementById('opponent-stats-container'),
+            opponentScoreStat: document.getElementById('opponent-score-stat'),
+            opponentStatus: document.getElementById('opponent-status'),
+            islandMap: document.getElementById('island-map'),
+            schemaViewerContainer: document.getElementById('schema-viewer-container'),
+            schemaViewer: document.getElementById('schema-viewer'),
+            tableViewerContainer: document.getElementById('table-viewer-container'),
+            tableViewer: document.getElementById('table-viewer'),
+            challengeTitle: document.getElementById('challenge-title'),
+            challengeStory: document.getElementById('challenge-story'),
+            challengeHint: document.getElementById('challenge-hint'),
+            sqlEditor: document.getElementById('sql-editor'),
+            messageArea: document.getElementById('message-area'),
+            runQueryBtn: document.getElementById('run-query-btn'),
+            getHintBtn: document.getElementById('get-hint-btn'),
+            resultTitle: document.getElementById('result-title'),
+            resultHead: document.getElementById('result-head'),
+            resultBody: document.getElementById('result-body'),
+            gameModeModal: document.getElementById('game-mode-modal'),
+            difficultyModal: document.getElementById('difficulty-modal'),
+            backToModeSelectBtn: document.getElementById('back-to-mode-select-btn'),
+            multiplayerModal: document.getElementById('multiplayer-modal'),
+            gameOverModal: document.getElementById('game-over-modal'),
+            startSinglePlayerBtn: document.getElementById('start-single-player'),
+            startVsComputerBtn: document.getElementById('start-vs-computer'),
+            startMultiplayerBtn: document.getElementById('start-multiplayer'),
+            createRoomBtn: document.getElementById('create-room-btn'),
+            joinRoomBtn: document.getElementById('join-room-btn'),
+            roomCodeInput: document.getElementById('room-code-input'),
+            multiplayerMessage: document.getElementById('multiplayer-message'),
+            backToMenuBtn: document.getElementById('back-to-menu-btn'),
+            gameOverTitle: document.getElementById('game-over-title'),
+            gameOverMessage: document.getElementById('game-over-message'),
+            finalScore: document.getElementById('final-score'),
+            playAgainBtn: document.getElementById('play-again-btn'),
+        };
+
+        // --- GAME STATE & CONFIG ---
+        let db; // SQL.js database
+        let fStore; // Firestore database
+        let auth;
+        let userId;
+        let unsubscribeRoom; // To detach Firestore listener
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'sql-survival-default';
+
+        const gameState = {
+            mode: null, // 'single', 'cpu', 'multiplayer'
+            difficulty: 'moderate',
+            player: { score: 0, health: 100, energy: 100, unlockedLocations: ['Crash Site'], hintsUsed: 0 },
+            opponent: { score: 0, isThinking: false },
+            currentChallengeIndex: 0,
+            challengeTimerInterval: null,
+            aiSolveTimeout: null,
+            weatherEffect: null,
+            roomCode: null,
+            isHost: false,
+        };
+        
+        // --- DATABASE SCHEMA AND DATA ---
+        const schema = `
+            CREATE TABLE survivors (id INT, name VARCHAR(255), health INT, energy INT, location_id INT);
+            CREATE TABLE locations (id INT, name VARCHAR(255), icon TEXT, description VARCHAR(255), unlocks_location VARCHAR(255));
+            CREATE TABLE resources (id INT, name VARCHAR(255), type VARCHAR(255), quantity INT, location_id INT, edibility VARCHAR(255));
+            CREATE TABLE wildlife (id INT, name VARCHAR(255), type VARCHAR(255), danger_level INT, location_id INT);
+            CREATE TABLE wreckage_manifest (item_id VARCHAR(20), description TEXT, quantity INT, condition TEXT);
+            CREATE TABLE survivor_log (log_id INT, survivor_id INT, log_entry TEXT, log_date DATE);
+            CREATE TABLE weather (id INT, condition TEXT, description TEXT, effect_type TEXT, modifier REAL);
+            CREATE TABLE camp_supplies (item_name VARCHAR(255) PRIMARY KEY, quantity INT, status VARCHAR(50));
+        `;
+        const data = `
+            INSERT INTO survivors VALUES (1, 'Alex', 100, 100, 1), (2, 'Ben', 90, 80, 2), (3, 'Chloe', 95, 85, 3), (4, 'David', 85, 70, 2), (5, 'Frank', 80, 60, 4), (6, 'Grace', 90, 75, 4);
+            INSERT INTO locations VALUES (1, 'Crash Site', '✈️', 'The smoldering wreckage of a small plane. A few supplies might be salvageable.', 'Beach'), (2, 'Beach', '🏖️', 'A sandy shore with palm trees. The ocean is vast and unforgiving.', 'Jungle'), (3, 'Jungle', '🌴', 'A dense, humid jungle teeming with life, both helpful and hostile.', 'Cave'), (4, 'Cave', '🦇', 'A dark, mysterious cave system. Who knows what secrets it holds?', 'Mountain'), (5, 'Mountain', '⛰️', 'A high peak offering a wide view. The perfect place for signaling.', 'River Delta'), (6, 'River Delta', '🏞️', 'A fast-flowing river. It might lead somewhere, but crossing looks treacherous.', 'Abandoned Camp'), (7, 'Abandoned Camp', '⛺️', 'An old, deserted camp. Looks like someone else was here before.', 'Rescue Landing Site'), (8, 'Rescue Landing Site', '🚁', 'A clear, flat area on the coast. The perfect spot for a rescue helicopter to land.', null);
+            INSERT INTO resources VALUES (1, 'Coconut', 'Food', 10, 2, 'Edible'), (2, 'Fresh Water Spring', 'Water', 1, 3, 'Potable'), (3, 'Strange Berries', 'Food', 20, 3, 'Poisonous'), (4, 'Scrap Metal', 'Material', 5, 1, 'Inedible'), (5, 'Vine', 'Material', 15, 3, 'Inedible'), (6, 'Flint', 'Tool', 2, 4, 'Inedible'), (7, 'Ocean Water', 'Water', 999, 2, 'Salty'), (8, 'Seaweed', 'Food', 30, 2, 'Edible'), (9, 'Banana', 'Food', 25, 3, 'Edible');
+            INSERT INTO wildlife VALUES (1, 'Parrot', 'Bird', 0, 3), (2, 'Boar', 'Mammal', 5, 3), (3, 'Snake', 'Reptile', 8, 3), (4, 'Crab', 'Crustacean', 1, 2), (5, 'Mountain Goat', 'Mammal', 3, 5), (6, 'Shark', 'Fish', 10, 2), (7, 'Monkey', 'Mammal', 2, 3);
+            INSERT INTO wreckage_manifest VALUES (' MEDKIT-001', 'Standard First-Aid Kit', 1, 'Damaged'), (' RATION-003 ', 'Emergency Food Ration', 5, 'Good'), ('  TOOL-AXE-01', 'Small Hand Axe', 1, 'Good'), ('FABRIC-009', 'Torn Canvas Sheet', 3, 'Damaged');
+            INSERT INTO survivor_log VALUES (1, 1, 'Found fresh water supply.', '2025-10-01'), (2, 2, 'Spotted a boar near the beach.', '2025-10-01'), (3, 3, 'Heard strange noises from the cave.', '2025-10-02'), (4, 1, 'Collected scrap metal from the crash.', '2025-10-02'), (5, 1, 'Feeling hopeful today.', '2025-10-03'), (6, 5, 'Lost my bearings in the cave.', '2025-10-03');
+            INSERT INTO weather VALUES (1, 'Thick Fog', 'Visibility is low. It is hard to see the database schema.', 'HIDE_SCHEMA', 0), (2, 'Heavy Rain', 'The downpour makes it hard to think. You have less time.', 'TIME_PENALTY', 15), (3, 'Scorching Sun', 'The heat is draining your energy.', 'ENERGY_DRAIN', 1), (4, 'Clear Skies', 'A perfect day for survival.', 'NONE', 0);
+            INSERT INTO camp_supplies VALUES ('Canned Beans', 5, 'Good'), ('Tarp', 1, 'Good'), ('Rope', 3, 'Good'), ('Matches', 1, 'Damp');
+        `;
+
+        const challenges = [
+            // Level 1: Basic SELECT & Filtering
+            { id: 0, locationName: 'Crash Site', title: 'Take Inventory (SELECT *)', story: "Let's see what's in the plane wreckage. Show everything from the `wreckage_manifest`.", query: "SELECT * FROM wreckage_manifest;", points: 10, type: 'SELECT' },
+            { id: 1, locationName: 'Crash Site', title: 'Find Usable Items (WHERE)', story: "We only need items in 'Good' condition. From the wreckage, show the `description` of items where `condition` is 'Good'.", query: "SELECT description FROM wreckage_manifest WHERE condition = 'Good';", points: 10, type: 'SELECT' },
+            { id: 2, locationName: 'Crash Site', title: 'Find Water (AND)', story: "You are thirsty. Find all resources that are 'Water' type AND are 'Potable' (safe to drink).", query: "SELECT * FROM resources WHERE type = 'Water' AND edibility = 'Potable';", points: 10, type: 'SELECT' },
+            { id: 3, locationName: 'Beach', title: 'Unique Resources (DISTINCT)', story: "To take stock, list each unique resource `type` you've found on the island so far.", query: "SELECT DISTINCT type FROM resources;", points: 15, type: 'SELECT' },
+            // Level 2: Sorting & Limiting
+            { id: 4, locationName: 'Beach', title: 'Sort Wildlife (ORDER BY)', story: "You hear animals nearby. List all wildlife on the beach (location_id 2) and sort them by `name` alphabetically.", query: "SELECT name FROM wildlife WHERE location_id = 2 ORDER BY name;", points: 15, type: 'SELECT' },
+            { id: 5, locationName: 'Beach', title: 'Find Survivors (NOT)', story: "Find all survivors who are NOT at the Crash Site (location_id 1).", query: "SELECT name FROM survivors WHERE NOT location_id = 1;", points: 15, type: 'SELECT' },
+            { id: 6, locationName: 'Jungle', title: 'Top 3 Dangers (LIMIT)', story: "The jungle is dangerous. List the top 3 animals with the highest `danger_level`.", query: "SELECT name, danger_level FROM wildlife ORDER BY danger_level DESC LIMIT 3;", points: 15, type: 'SELECT' },
+            // Level 3: Aggregation Fundamentals
+            { id: 7, locationName: 'Jungle', title: 'Count Resources (COUNT)', story: "How many different kinds of resources are in the jungle (location_id 3)? Count them.", query: "SELECT COUNT(*) FROM resources WHERE location_id = 3;", points: 15, type: 'SELECT' },
+            { id: 8, locationName: 'Jungle', title: 'Total Food (SUM)', story: "You're getting hungry. What is the total `quantity` of all 'Edible' food on the island?", query: "SELECT SUM(quantity) FROM resources WHERE edibility = 'Edible';", points: 15, type: 'SELECT' },
+            { id: 9, locationName: 'Jungle', title: 'Weakest Survivor (MIN)', story: "We need to look out for each other. Find the `name` of the survivor with the lowest `health`.", query: "SELECT name FROM survivors ORDER BY health ASC LIMIT 1;", points: 15, type: 'SELECT' },
+            { id: 10, locationName: 'Jungle', title: 'Most Dangerous Animal (MAX)', story: "What is the single most dangerous animal on the island? Find the maximum `danger_level`.", query: "SELECT MAX(danger_level) FROM wildlife;", points: 15, type: 'SELECT' },
+            { id: 11, locationName: 'Jungle', title: 'Average Danger (AVG)', story: "To prepare, find the average `danger_level` of all wildlife in the jungle (location_id 3).", query: "SELECT AVG(danger_level) FROM wildlife WHERE location_id = 3;", points: 15, type: 'SELECT' },
+            { id: 12, locationName: 'Jungle', title: 'Group Resources (GROUP BY)', story: "Let's organize our findings. Show a count of how many resources there are for each `type`.", query: "SELECT type, COUNT(*) FROM resources GROUP BY type;", points: 20, type: 'SELECT' },
+            // Level 4: Filtering Aggregates
+            { id: 13, locationName: 'Cave', title: 'Resource Hotspots (HAVING)', story: "Some areas are richer than others. Find the `location_id` for all places that have more than two kinds of resources.", query: "SELECT location_id FROM resources GROUP BY location_id HAVING COUNT(id) > 2;", points: 20, type: 'SELECT' },
+            // Level 5: Basic Joins
+            { id: 14, locationName: 'Cave', title: 'Survivor Locations (INNER JOIN)', story: "Let's find everyone. Show each survivor's `name` and the `name` of the location they are in.", query: "SELECT s.name, l.name as location_name FROM survivors s JOIN locations l ON s.location_id = l.id;", points: 25, type: 'SELECT' },
+            { id: 15, locationName: 'Cave', title: 'Survivors Without Logs (LEFT JOIN & IS NULL)', story: "Is anyone not keeping a log? Find the names of any survivors who do not have an entry in the `survivor_log`.", query: "SELECT s.name FROM survivors s LEFT JOIN survivor_log sl ON s.id = sl.survivor_id WHERE sl.log_id IS NULL;", points: 25, type: 'SELECT' },
+            // Level 6: Multiple Joins
+            { id: 16, locationName: 'Cave', title: 'Full Report', story: "We need a full status report. Show the survivor's name, the location they are in, and their latest log entry.", query: "SELECT s.name, l.name AS location, sl.log_entry FROM survivors s JOIN locations l ON s.location_id = l.id LEFT JOIN survivor_log sl ON s.id = sl.survivor_id;", points: 30, type: 'SELECT' },
+            // Level 7: Subqueries
+            { id: 17, locationName: 'Mountain', title: 'Above-Average Danger (Subquery)', story: "To stay safe, identify all animals whose `danger_level` is higher than the island's average.", query: "SELECT name, danger_level FROM wildlife WHERE danger_level > (SELECT AVG(danger_level) FROM wildlife);", points: 35, type: 'SELECT' },
+            // Level 8: String Functions & Filtering
+            { id: 18, locationName: 'Mountain', title: 'Find Berries (LIKE)', story: "You remember seeing some berries. Find any resource whose `name` ends with the word 'Berries'.", query: "SELECT * FROM resources WHERE name LIKE '%Berries';", points: 20, type: 'SELECT' },
+            { id: 19, locationName: 'Mountain', title: 'Food and Water (IN)', story: "You need to focus on essentials. List the names of all resources that are either 'Food' or 'Water' type.", query: "SELECT name FROM resources WHERE type IN ('Food', 'Water');", points: 20, type: 'SELECT' },
+            { id: 20, locationName: 'Mountain', title: 'Clean the Manifest (TRIM)', story: "The item IDs in the manifest have extra spaces. Show the `description` and the `item_id` without any spaces.", query: "SELECT TRIM(item_id) AS cleaned_id, description FROM wreckage_manifest;", points: 15, type: 'SELECT' },
+            // Level 9: Conditional Logic & Window Functions
+            { id: 21, locationName: 'River Delta', title: 'Assess Item Conditions (CASE)', story: "Let's sort the salvaged items. If `condition` is 'Good', call it 'Usable'. If 'Damaged', call it 'Needs Repair'.", query: "SELECT description, CASE condition WHEN 'Good' THEN 'Usable' WHEN 'Damaged' THEN 'Needs Repair' END AS status FROM wreckage_manifest;", points: 25, type: 'SELECT' },
+            { id: 22, locationName: 'River Delta', title: 'Rank Resources by Location (RANK)', story: "You need to organize supplies. List all resources, ranked alphabetically by `name` for each `location_id`.", query: "SELECT name, location_id, RANK() OVER (PARTITION BY location_id ORDER BY name) as location_rank FROM resources;", points: 40, type: 'SELECT' },
+            { id: 23, locationName: 'River Delta', title: 'Check Previous Log (LAG)', story: "To understand survivor movements, show each log entry along with the entry that came before it for each survivor.", query: "SELECT log_entry, LAG(log_entry, 1, 'First entry') OVER (PARTITION BY survivor_id ORDER BY log_date) as previous_entry FROM survivor_log;", points: 40, type: 'SELECT' },
+            // Level 10: Set Operations & Date Functions
+            { id: 24, locationName: 'Abandoned Camp', title: 'Potential Food Sources (UNION)', story: "List all possible things you can eat. Combine the `name` of all 'Edible' resources with the `name` of all wildlife with a danger level less than 2.", query: "SELECT name FROM resources WHERE edibility = 'Edible' UNION SELECT name FROM wildlife WHERE danger_level < 2;", points: 30, type: 'SELECT' },
+            { id: 25, locationName: 'Abandoned Camp', title: 'Logs from a Time Range (BETWEEN)', story: "You want to find out what happened when you first arrived. Show all log entries between October 1st and October 2nd, 2025.", query: "SELECT * FROM survivor_log WHERE log_date BETWEEN '2025-10-01' AND '2025-10-02';", points: 30, type: 'SELECT' },
+            // Level 11: Data Modification
+            { id: 26, locationName: 'Abandoned Camp', title: 'Add Supplies (INSERT)', story: "You found a stash of firewood. Add 'Firewood' to the `camp_supplies` with a quantity of 10 and a 'Good' status.", query: "INSERT INTO camp_supplies (item_name, quantity, status) VALUES ('Firewood', 10, 'Good');", points: 25, type: 'DML' },
+            { id: 27, locationName: 'Abandoned Camp', title: 'Fix Supplies (UPDATE)', story: "The matches at the abandoned camp are damp. Update their `status` to 'Useless' in the `camp_supplies` table.", query: "UPDATE camp_supplies SET status = 'Useless' WHERE item_name = 'Matches';", points: 25, type: 'DML' },
+            { id: 28, locationName: 'Abandoned Camp', title: 'Use Rope (DELETE)', story: "You used the rope to build a shelter. Remove 'Rope' from the `camp_supplies`.", query: "DELETE FROM camp_supplies WHERE item_name = 'Rope';", points: 25, type: 'DML' },
+            // Level 12: Final Challenge
+            { id: 29, locationName: 'Rescue Landing Site', title: 'Final Rescue (Complex Query)', story: "The rescue helicopter is close! You need a list of all survivors who are healthy (health > 90) and are at the 'Rescue Landing Site' (location_id 8).", query: "SELECT name FROM survivors WHERE health > 90 AND location_id = 8;", points: 100, type: 'SELECT' }
+        ];
+
+        // --- INITIALIZATION ---
+        async function initialize() {
+            try {
+                const SQL = await initSqlJs({ locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/${file}` });
+                db = new SQL.Database();
+                db.run(schema);
+                db.run(data);
+                renderSchema();
+                renderTableViewer();
+                setupEventListeners();
+                
+                await initFirebase();
+
+            } catch (err) {
+                console.error("Initialization failed:", err);
+                DOMElements.challengeStory.textContent = "Error loading game components. Please refresh the page.";
+            }
+        }
+        
+        async function initFirebase() {
+             try {
+                const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+                const app = initializeApp(firebaseConfig);
+                fStore = getFirestore(app);
+                auth = getAuth(app);
+                
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+                userId = auth.currentUser?.uid;
+                if (!userId) throw new Error("Authentication failed.");
+             } catch (error) {
+                 console.error("Firebase initialization failed:", error);
+                 DOMElements.multiplayerMessage.textContent = "Could not connect to multiplayer services.";
+             }
+        }
+        
+        // --- UI & RENDERING ---
+        function renderSchema() {
+            const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")[0].values;
+            DOMElements.schemaViewer.innerHTML = tables.map(table => {
+                const tableName = table[0];
+                const cols = db.exec(`PRAGMA table_info(${tableName});`)[0].values;
+                const colList = cols.map(c => `<li>&nbsp;&nbsp;- ${c[1]} <span class="text-gray-500">(${c[2]})</span></li>`).join('');
+                return `<div class="bg-gray-700/50 p-1 rounded"><strong>${tableName}</strong><ul>${colList}</ul></div>`;
+            }).join('');
+        }
+
+        function renderTableViewer() {
+            const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%';")[0].values.flat();
+            DOMElements.tableViewer.innerHTML = tables.map(tableName => 
+                `<button class="btn-secondary text-xs py-1 px-2 rounded" data-table-name="${tableName}">${tableName}</button>`
+            ).join('');
+
+            DOMElements.tableViewer.addEventListener('click', (e) => {
+                if (e.target.tagName === 'BUTTON') {
+                    const tableName = e.target.dataset.tableName;
+                    try {
+                        const results = db.exec(`SELECT * FROM ${tableName};`);
+                        displayResults(results);
+                        DOMElements.resultTitle.textContent = `Viewing Table: ${tableName}`;
+                    } catch (err) {
+                        showMessage(`Could not display table: ${err.message}`, true);
+                    }
+                }
+            });
+        }
+        
+        function renderMap() {
+             const locations = db.exec("SELECT name, icon FROM locations;")[0].values;
+             const currentChallenge = challenges[gameState.currentChallengeIndex];
+             DOMElements.islandMap.innerHTML = locations.map(locData => {
+                const [locName, locIcon] = locData;
+                const isUnlocked = gameState.player.unlockedLocations.includes(locName);
+                const isActive = currentChallenge && currentChallenge.locationName === locName;
+                
+                return `
+                    <div class="map-location ${isUnlocked ? 'unlocked' : 'locked'} ${isActive ? 'active' : ''} text-center">
+                        <div class="map-icon">${locIcon}</div>
+                        <div class="text-xs">${locName}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+
+        function updateUI() {
+            DOMElements.healthStat.textContent = gameState.player.health;
+            DOMElements.energyStat.textContent = gameState.player.energy;
+            DOMElements.scoreStat.textContent = gameState.player.score;
+
+            if (gameState.player.health <= 0 || gameState.player.energy <= 0) {
+                endGame(false, gameState.player.health <= 0 ? 'You ran out of health!' : 'You collapsed from exhaustion!');
+            }
+            
+            renderMap();
+
+            if (gameState.mode === 'cpu' || gameState.mode === 'multiplayer') {
+                DOMElements.opponentStatsContainer.classList.remove('hidden');
+                DOMElements.opponentScoreStat.textContent = gameState.opponent.score;
+            } else {
+                 DOMElements.opponentStatsContainer.classList.add('hidden');
+            }
+        }
+        
+        function updateVisibilityForDifficulty() {
+            const difficulty = gameState.difficulty;
+            DOMElements.getHintBtn.classList.add('hidden');
+            DOMElements.timerContainer.classList.add('hidden');
+            DOMElements.challengeHint.classList.remove('hidden');
+            DOMElements.schemaViewerContainer.style.display = 'block';
+
+
+            if (difficulty === 'easy') {
+                DOMElements.getHintBtn.classList.remove('hidden');
+            }
+            if (difficulty === 'moderate') {
+                DOMElements.challengeHint.classList.add('hidden');
+            }
+            // Weather override
+            if (gameState.weatherEffect?.effect_type === 'HIDE_SCHEMA') {
+                DOMElements.schemaViewerContainer.style.display = 'none';
+            }
+        }
+
+        function loadChallenge(challengeIndex) {
+            clearInterval(gameState.challengeTimerInterval);
+            clearTimeout(gameState.aiSolveTimeout);
+            
+            if (challengeIndex >= challenges.length) {
+                endGame(true);
+                return;
+            }
+
+            triggerWeatherEvent();
+
+            const challenge = challenges[challengeIndex];
+            if (!challenge) return;
+
+            gameState.currentChallengeIndex = challengeIndex;
+            DOMElements.challengeTitle.textContent = challenge.title;
+            DOMElements.challengeStory.textContent = challenge.story;
+            DOMElements.challengeHint.textContent = challenge.hint;
+
+            gameState.player.hintsUsed = 0;
+            DOMElements.getHintBtn.disabled = false;
+            DOMElements.sqlEditor.value = '';
+            DOMElements.messageArea.textContent = '';
+            
+            updateUI();
+            updateVisibilityForDifficulty();
+            
+            if (gameState.difficulty === 'genius') {
+                let time = 60;
+                if (gameState.weatherEffect?.effect_type === 'TIME_PENALTY') {
+                    time -= gameState.weatherEffect.modifier;
+                }
+                startChallengeTimer(time);
+            }
+
+            if (gameState.mode === 'cpu') {
+                runComputerAI();
+            }
+        }
+
+        function displayResults(execResult) {
+            if (!execResult || execResult.length === 0) {
+                DOMElements.resultHead.innerHTML = '';
+                DOMElements.resultBody.innerHTML = '<tr><td class="p-2 text-gray-400">Query executed successfully, but returned no results.</td></tr>';
+                return;
+            }
+            const { columns, values } = execResult[0];
+            DOMElements.resultHead.innerHTML = `<tr>${columns.map(col => `<th class="p-2">${col}</th>`).join('')}</tr>`;
+            DOMElements.resultBody.innerHTML = values.map(row => `<tr>${row.map(val => `<td class="p-2">${val}</td>`).join('')}</tr>`).join('');
+        }
+        
+        function showMessage(text, isError = false) {
+             DOMElements.messageArea.textContent = text;
+             DOMElements.messageArea.style.color = isError ? '#f56565' : '#68d391';
+             setTimeout(() => DOMElements.messageArea.textContent = '', 3000);
+        }
+
+        // --- GAME LOGIC ---
+        function normalizeSQL(sql) {
+            return sql.replace(/\s+/g, ' ').trim().toLowerCase();
+        }
+
+        function applyPenalty() {
+            if (gameState.difficulty === 'hard' || gameState.difficulty === 'genius') {
+                gameState.player.health = Math.max(0, gameState.player.health - 10);
+                showMessage("Incorrect! You lost 10 health.", true);
+            } else {
+                showMessage("Incorrect. Try again!", true);
+            }
+            gameState.player.score = Math.max(0, gameState.player.score - 2);
+            updateUI();
+        }
+
+        function runQuery() {
+            DOMElements.resultTitle.textContent = "Query Result";
+            const userQuery = DOMElements.sqlEditor.value;
+            const challenge = challenges[gameState.currentChallengeIndex];
+
+            if (challenge.type === 'DDL' || challenge.type === 'DML') {
+                checkAnswer(null, userQuery);
+                return;
+            }
+            
+            try {
+                const results = db.exec(userQuery);
+                displayResults(results);
+                checkAnswer(results);
+            } catch (err) {
+                 DOMElements.resultHead.innerHTML = '';
+                 DOMElements.resultBody.innerHTML = `<tr><td class="p-2 text-red-400">Error: ${err.message}</td></tr>`;
+                 applyPenalty();
+            }
+        }
+        
+        function getHint() {
+            if (gameState.difficulty !== 'easy') return;
+
+            if (gameState.player.score < 5) {
+                showMessage("Not enough points for a hint!", true);
+                return;
+            }
+
+            gameState.player.score -= 5;
+            gameState.player.hintsUsed++;
+            
+            const challenge = challenges[gameState.currentChallengeIndex];
+            const correctQuery = challenge.query;
+            
+            const queryParts = correctQuery.split(' ');
+            const revealPercentage = Math.min(0.25 * gameState.player.hintsUsed, 1.0);
+            const partsToShowCount = Math.ceil(queryParts.length * revealPercentage);
+            
+            const hintText = queryParts.slice(0, partsToShowCount).join(' ');
+            DOMElements.sqlEditor.value = hintText;
+
+            if (partsToShowCount >= queryParts.length) {
+                DOMElements.getHintBtn.disabled = true;
+            }
+            
+            updateUI();
+            showMessage("Hint revealed!", false);
+        }
+
+        function checkAnswer(userResult, userQuery) {
+            const challenge = challenges[gameState.currentChallengeIndex];
+            let isCorrect = false;
+
+            try {
+                 if (challenge.type === 'SELECT') {
+                    const correctResult = db.exec(challenge.query);
+                    const userResultStr = JSON.stringify(userResult);
+                    const correctResultStr = JSON.stringify(correctResult);
+                    isCorrect = userResultStr === correctResultStr;
+                } else {
+                    isCorrect = normalizeSQL(userQuery) === normalizeSQL(challenge.query);
+                    if(isCorrect) {
+                        DOMElements.resultBody.innerHTML = '<tr><td class="p-2 text-green-400">Command accepted.</td></tr>';
+                    } else {
+                         DOMElements.resultBody.innerHTML = '<tr><td class="p-2 text-red-400">Incorrect command syntax.</td></tr>';
+                    }
+                }
+
+                if (isCorrect) {
+                    clearTimeout(gameState.aiSolveTimeout);
+                    clearInterval(gameState.challengeTimerInterval);
+                    gameState.weatherEffect = null; 
+                    DOMElements.weatherContainer.classList.add('hidden');
+
+                    showMessage("Correct!", false);
+                    gameState.player.score += challenge.points;
+                    
+                    const locationInfo = db.exec(`SELECT unlocks_location FROM locations WHERE name = '${challenge.locationName}'`)[0].values[0][0];
+                    if (locationInfo && !gameState.player.unlockedLocations.includes(locationInfo)) {
+                        gameState.player.unlockedLocations.push(locationInfo);
+                        showMessage(`New Location Unlocked: ${locationInfo}!`, false);
+                    }
+
+                    updateUI();
+
+                    const nextChallengeIndex = gameState.currentChallengeIndex + 1;
+                    setTimeout(() => loadChallenge(nextChallengeIndex), 1500);
+
+                } else {
+                    applyPenalty();
+                }
+            } catch(e) {
+                 showMessage(`Error checking answer: ${e.message}`, true);
+            }
+        }
+        
+        function triggerWeatherEvent() {
+            const weatherData = db.exec("SELECT * FROM weather;")[0].values;
+            const randomWeather = weatherData[Math.floor(Math.random() * weatherData.length)];
+            const [id, condition, description, effect_type, modifier] = randomWeather;
+
+            if (effect_type !== 'NONE') {
+                gameState.weatherEffect = { condition, description, effect_type, modifier };
+                DOMElements.weatherContainer.classList.remove('hidden');
+                DOMElements.weatherCondition.textContent = condition;
+                DOMElements.weatherEffect.textContent = description;
+            } else {
+                gameState.weatherEffect = null;
+                DOMElements.weatherContainer.classList.add('hidden');
+            }
+        }
+        
+        function startChallengeTimer(timeLimit) {
+            clearInterval(gameState.challengeTimerInterval);
+            let timeLeft = timeLimit;
+            DOMElements.timerContainer.classList.remove('hidden');
+            DOMElements.timerStat.textContent = timeLeft;
+
+            gameState.challengeTimerInterval = setInterval(() => {
+                timeLeft--;
+                DOMElements.timerStat.textContent = timeLeft;
+                if (timeLeft <= 0) {
+                    clearInterval(gameState.challengeTimerInterval);
+                    if (gameState.difficulty === 'hard' || gameState.difficulty === 'genius') {
+                        gameState.player.energy = Math.max(0, gameState.player.energy - 15);
+                        showMessage("Time's up! You lost 15 energy.", true);
+                    } else {
+                        showMessage("Time's up!", true);
+                    }
+                    gameState.player.score = Math.max(0, gameState.player.score - 5);
+                    updateUI();
+                    
+                    const nextChallengeIndex = gameState.currentChallengeIndex + 1;
+                    setTimeout(() => loadChallenge(nextChallengeIndex), 1500);
+                }
+            }, 1000);
+        }
+
+        function resetGame() {
+            clearInterval(gameState.challengeTimerInterval);
+            clearTimeout(gameState.aiSolveTimeout);
+            gameState.mode = null;
+            gameState.difficulty = 'moderate';
+            gameState.player = { score: 0, health: 100, energy: 100, unlockedLocations: ['Crash Site'], hintsUsed: 0 };
+            gameState.opponent = { score: 0, isThinking: false };
+            gameState.currentChallengeIndex = 0;
+            gameState.roomCode = null;
+            gameState.isHost = false;
+            
+            if(unsubscribeRoom) {
+                unsubscribeRoom();
+                unsubscribeRoom = null;
+            }
+
+            DOMElements.gameModeModal.classList.remove('hidden');
+            DOMElements.gameOverModal.classList.add('hidden');
+            DOMElements.difficultyModal.classList.add('hidden');
+            DOMElements.multiplayerModal.classList.add('hidden');
+            
+            DOMElements.runQueryBtn.disabled = true;
+            DOMElements.exitGameBtn.classList.add('hidden');
+            DOMElements.switchLevelBtn.classList.add('hidden');
+            
+            DOMElements.challengeTitle.textContent = "Select a Game Mode";
+            DOMElements.challengeStory.textContent = "Welcome back, survivor. Ready for another attempt?";
+            DOMElements.challengeHint.textContent = "";
+            DOMElements.sqlEditor.value = "";
+            DOMElements.resultHead.innerHTML = '';
+            DOMElements.resultBody.innerHTML = '';
+
+            updateUI();
+            updateVisibilityForDifficulty();
+        }
+
+        function endGame(isWin, reason = "") {
+            clearInterval(gameState.challengeTimerInterval);
+            clearTimeout(gameState.aiSolveTimeout);
+            if (gameState.mode === 'multiplayer' && gameState.roomCode && gameState.isHost) {
+                 const roomRef = doc(fStore, `artifacts/${appId}/public/data/sql-survival-rooms`, gameState.roomCode);
+                 deleteDoc(roomRef); // Clean up room
+            }
+
+            DOMElements.gameOverModal.classList.remove('hidden');
+            DOMElements.runQueryBtn.disabled = true;
+            DOMElements.switchLevelBtn.classList.add('hidden');
+            DOMElements.exitGameBtn.classList.add('hidden');
+
+            if (isWin) {
+                DOMElements.gameOverTitle.textContent = "You've Been Rescued!";
+                if(gameState.mode === 'cpu') {
+                    const playerWon = gameState.player.score > gameState.opponent.score;
+                    DOMElements.gameOverMessage.textContent = playerWon ? "You beat the AI and escaped the island!" : "The AI opponent out-queried you!";
+                } else {
+                    DOMElements.gameOverMessage.textContent = "You've successfully solved all the challenges and signaled for rescue!";
+                }
+            } else {
+                 DOMElements.gameOverTitle.textContent = "Game Over";
+                 DOMElements.gameOverMessage.textContent = reason || "You failed to survive the island.";
+            }
+            DOMElements.finalScore.textContent = gameState.player.score;
+        }
+
+        // --- GAME MODES ---
+        function startGame(mode) {
+            clearInterval(gameState.challengeTimerInterval);
+            clearTimeout(gameState.aiSolveTimeout);
+            gameState.mode = mode;
+            DOMElements.gameModeModal.classList.add('hidden');
+            DOMElements.runQueryBtn.disabled = false;
+            DOMElements.exitGameBtn.classList.remove('hidden');
+
+            if (mode === 'single' || mode === 'cpu') {
+                DOMElements.switchLevelBtn.classList.remove('hidden');
+            } else {
+                DOMElements.switchLevelBtn.classList.add('hidden');
+            }
+            
+            gameState.opponent = { score: 0, isThinking: false }; // Reset opponent on new game
+
+            updateUI();
+            
+            let statusText = `Mode: ${mode.charAt(0).toUpperCase() + mode.slice(1)}`;
+            if(mode !== 'multiplayer') { 
+                statusText += ` (${gameState.difficulty.charAt(0).toUpperCase() + gameState.difficulty.slice(1)})`;
+            } else {
+                statusText += ` | Room: ${gameState.roomCode}`;
+            }
+            DOMElements.gameStatus.textContent = statusText;
+            
+            loadChallenge(0);
+        }
+        
+        function switchLevel() {
+            if (gameState.mode === 'single' || gameState.mode === 'cpu') {
+                clearInterval(gameState.challengeTimerInterval);
+                clearTimeout(gameState.aiSolveTimeout);
+                DOMElements.difficultyModal.classList.remove('hidden');
+            }
+        }
+
+        function exitGame() {
+            resetGame();
+        }
+
+        function runComputerAI() {
+            clearTimeout(gameState.aiSolveTimeout);
+
+            const difficultyDelays = { 'easy': 20000, 'moderate': 15000, 'hard': 10000, 'genius': 8000 };
+            const delay = difficultyDelays[gameState.difficulty] + (Math.random() * 3000);
+            
+            DOMElements.opponentStatus.textContent = "Thinking...";
+            const challengeIndexForAI = gameState.currentChallengeIndex;
+
+            gameState.aiSolveTimeout = setTimeout(() => {
+                if(gameState.mode !== 'cpu' || gameState.currentChallengeIndex !== challengeIndexForAI) return; 
+
+                const challenge = challenges[challengeIndexForAI];
+                gameState.opponent.score += challenge.points;
+                DOMElements.opponentStatus.textContent = "Solved!";
+                showMessage("The AI solved it first!", true);
+                updateUI();
+                
+                const nextChallengeIndex = challengeIndexForAI + 1;
+                setTimeout(() => loadChallenge(nextChallengeIndex), 1500);
+
+            }, delay);
+        }
+
+        // --- MULTIPLAYER LOGIC ---
+        async function createRoom() {
+            const roomCode = Math.random().toString(36).substring(2, 7).toUpperCase();
+            gameState.roomCode = roomCode;
+            gameState.isHost = true;
+            const roomRef = doc(fStore, `artifacts/${appId}/public/data/sql-survival-rooms`, roomCode);
+            try {
+                await setDoc(roomRef, {
+                    hostId: userId,
+                    players: { [userId]: { score: 0 } },
+                    challengeIndex: 0,
+                    createdAt: new Date(),
+                });
+                joinRoom(roomCode);
+            } catch (error)
+            {
+                console.error("Error creating room:", error);
+                DOMElements.multiplayerMessage.textContent = "Failed to create room.";
+            }
+        }
+        
+        async function joinRoom(roomCode) {
+            if (!roomCode) {
+                DOMElements.multiplayerMessage.textContent = "Please enter a room code.";
+                return;
+            }
+            gameState.roomCode = roomCode;
+            const roomRef = doc(fStore, `artifacts/${appId}/public/data/sql-survival-rooms`, roomCode);
+
+            try {
+                const roomSnap = await getDoc(roomRef);
+                if (!roomSnap.exists()) {
+                    DOMElements.multiplayerMessage.textContent = "Room not found.";
+                    return;
+                }
+
+                const roomData = roomSnap.data();
+                if (Object.keys(roomData.players).length >= 2 && !roomData.players[userId]) {
+                    DOMElements.multiplayerMessage.textContent = "Room is full.";
+                    return;
+                }
+                
+                if (!roomData.players[userId]) {
+                    await updateDoc(roomRef, {
+                        [`players.${userId}`]: { score: 0 }
+                    });
+                }
+                
+                DOMElements.multiplayerModal.classList.add('hidden');
+                
+                unsubscribeRoom = onSnapshot(roomRef, (doc) => {
+                    handleRoomUpdate(doc.data());
+                });
+
+            } catch (error) {
+                console.error("Error joining room:", error);
+                DOMElements.multiplayerMessage.textContent = "Failed to join room.";
+            }
+        }
+        
+        function handleRoomUpdate(roomData) {
+            if (!roomData) {
+                if (gameState.currentChallengeIndex < challenges.length) {
+                    endGame(false, "Your opponent left the game.");
+                }
+                return;
+            }
+
+            const playerIds = Object.keys(roomData.players);
+            
+            if (playerIds.length === 2 && gameState.mode !== 'multiplayer') {
+                gameState.player = { score: 0, health: 100, energy: 100, unlockedLocations: ['Crash Site'], hintsUsed: 0 };
+                startGame('multiplayer');
+            }
+            
+            const opponentId = playerIds.find(id => id !== userId);
+            if(opponentId) {
+                gameState.opponent.score = roomData.players[opponentId].score;
+            } else {
+                 gameState.opponent.score = 0;
+            }
+
+            if (roomData.challengeIndex > gameState.currentChallengeIndex) {
+                 loadChallenge(roomData.challengeIndex);
+            }
+            
+            updateUI();
+        }
+
+        async function updateMultiplayerState(dataToUpdate) {
+            if (!gameState.roomCode) return;
+            const roomRef = doc(fStore, `artifacts/${appId}/public/data/sql-survival-rooms`, gameState.roomCode);
+            
+            const updatePayload = {};
+            if (dataToUpdate.score !== undefined) {
+                 updatePayload[`players.${userId}.score`] = dataToUpdate.score;
+            }
+            if (dataToUpdate.challengeIndex !== undefined) {
+                updatePayload.challengeIndex = dataToUpdate.challengeIndex;
+            }
+            
+            await updateDoc(roomRef, updatePayload);
+        }
+
+        // --- EVENT LISTENERS ---
+        function setupEventListeners() {
+            DOMElements.runQueryBtn.addEventListener('click', runQuery);
+            DOMElements.getHintBtn.addEventListener('click', getHint);
+            DOMElements.switchLevelBtn.addEventListener('click', switchLevel);
+            DOMElements.exitGameBtn.addEventListener('click', exitGame);
+
+            DOMElements.startSinglePlayerBtn.addEventListener('click', () => {
+                DOMElements.gameModeModal.classList.add('hidden');
+                gameState.mode = 'single';
+                DOMElements.difficultyModal.classList.remove('hidden');
+            });
+            
+            DOMElements.startVsComputerBtn.addEventListener('click', () => {
+                DOMElements.gameModeModal.classList.add('hidden');
+                gameState.mode = 'cpu';
+                DOMElements.difficultyModal.classList.remove('hidden');
+            });
+
+            DOMElements.difficultyModal.addEventListener('click', (e) => {
+                if(e.target.tagName === 'BUTTON' && e.target.dataset.difficulty) {
+                    gameState.difficulty = e.target.dataset.difficulty;
+                    DOMElements.difficultyModal.classList.add('hidden');
+                    
+                    gameState.player = { score: 0, health: 100, energy: 100, unlockedLocations: ['Crash Site'], hintsUsed: 0 };
+                    gameState.currentChallengeIndex = 0;
+                    startGame(gameState.mode); 
+                }
+            });
+
+            DOMElements.backToModeSelectBtn.addEventListener('click', () => {
+                DOMElements.difficultyModal.classList.add('hidden');
+                DOMElements.gameModeModal.classList.remove('hidden');
+            });
+
+            DOMElements.startMultiplayerBtn.addEventListener('click', () => {
+                gameState.player = { score: 0, health: 100, energy: 100, unlockedLocations: ['Crash Site'], hintsUsed: 0 };
+                DOMElements.gameModeModal.classList.add('hidden');
+                DOMElements.multiplayerModal.classList.remove('hidden');
+                DOMElements.multiplayerMessage.textContent = "";
+                DOMElements.roomCodeInput.value = "";
+            });
+            
+            DOMElements.backToMenuBtn.addEventListener('click', () => {
+                 DOMElements.multiplayerModal.classList.add('hidden');
+                 DOMElements.gameModeModal.classList.remove('hidden');
+            });
+            
+            DOMElements.createRoomBtn.addEventListener('click', createRoom);
+            DOMElements.joinRoomBtn.addEventListener('click', () => joinRoom(DOMElements.roomCodeInput.value.trim().toUpperCase()));
+            
+            DOMElements.playAgainBtn.addEventListener('click', resetGame);
+        }
+
+        // --- START ---
+        window.onload = initialize;
+    </script>
+</body>
+</html>
+
